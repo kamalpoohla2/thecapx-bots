@@ -25,59 +25,59 @@ import json
 import hashlib
 from datetime import datetime, timedelta
 from bots.base_bot import BaseBot
+import state_manager as sm
 
 
 class SocialMediaBot(BaseBot):
-    name = "social_media"
+
+    def __init__(self):
+        super().__init__("social_media")
 
     def run(self):
-        self.log("📱 Social Media Bot starting...")
-        config = self.load_config()
+        self.log.info("📱 Social Media Bot starting...")
 
         results = {}
 
         # ── Reddit ──────────────────────────────────────────────────
         reddit_client_id = os.getenv("REDDIT_CLIENT_ID", "")
         if reddit_client_id:
-            results["reddit"] = self._post_to_reddit(config)
+            results["reddit"] = self._post_to_reddit()
         else:
-            self.log("ℹ️  Reddit credentials not set — skipping")
+            self.log.info("ℹ️  Reddit credentials not set — skipping")
             results["reddit"] = {"skipped": True}
 
         # ── LinkedIn ────────────────────────────────────────────────
         linkedin_token = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
         if linkedin_token:
-            results["linkedin"] = self._post_to_linkedin(config)
+            results["linkedin"] = self._post_to_linkedin()
         else:
-            self.log("ℹ️  LinkedIn token not set — skipping")
+            self.log.info("ℹ️  LinkedIn token not set — skipping")
             results["linkedin"] = {"skipped": True}
 
         # ── Generate Quora answer drafts (manual posting) ────────────
-        results["quora_drafts"] = self._generate_quora_drafts(config)
+        results["quora_drafts"] = self._generate_quora_drafts()
 
-        self.log(f"✅ Social Media Bot done: {results}")
+        self.log.info(f"✅ Social Media Bot done: {results}")
         return results
 
     # ── Reddit ───────────────────────────────────────────────────────
-    def _post_to_reddit(self, config: dict) -> dict:
+    def _post_to_reddit(self) -> dict:
         """Post a helpful discussion to relevant subreddits."""
         try:
             import praw
         except ImportError:
-            self.log("⚠️  praw not installed — run: pip install praw")
+            self.log.warning("⚠️  praw not installed — run: pip install praw")
             return {"error": "praw_not_installed"}
 
-        # Get site analysis to find relevant subreddits
-        site_analysis_raw = self.state.get_value("site_analysis") or "{}"
-        try:
-            site_analysis = json.loads(site_analysis_raw)
-        except Exception:
+        # Get site analysis to find relevant subreddits (stored by website_analyzer)
+        site_analysis = sm.get_value("website_analyzer", "site_analysis", {})
+        if not isinstance(site_analysis, dict):
             site_analysis = {}
 
         keywords = site_analysis.get("keywords", [])[:5]
         services = site_analysis.get("services", [])[:3]
-        site_url = config.get("target_site_url", "")
-        site_name = config.get("site_name", "")
+        site_url  = self.target_site
+        site_name = self.site_name
 
         # Generate subreddit suggestions and post content using AI
         prompt = f"""
@@ -101,7 +101,7 @@ Return JSON:
             end   = raw.rfind("}") + 1
             post_data = json.loads(raw[start:end]) if start >= 0 else {}
         except Exception as e:
-            self.log(f"⚠️  Reddit post generation failed: {e}")
+            self.log.warning(f"⚠️  Reddit post generation failed: {e}")
             return {"error": str(e)}
 
         subreddits = post_data.get("subreddits", [])
@@ -127,12 +127,12 @@ Return JSON:
         for subreddit_name in subreddits[:1]:  # Post to 1 subreddit at a time
             # Check cooldown (48 hours per subreddit)
             cooldown_key = f"reddit_posted_{subreddit_name}"
-            last_posted  = self.state.get_value(cooldown_key) or ""
+            last_posted  = self.load(cooldown_key, "")
             if last_posted:
                 try:
                     last_dt = datetime.fromisoformat(last_posted)
                     if (datetime.utcnow() - last_dt).total_seconds() < 48 * 3600:
-                        self.log(f"⏭️  r/{subreddit_name} cooldown active — skipping")
+                        self.log.info(f"⏭️  r/{subreddit_name} cooldown active — skipping")
                         continue
                 except Exception:
                     pass
@@ -142,18 +142,18 @@ Return JSON:
                 submission  = subreddit.submit(title, selftext=body)
                 post_url    = f"https://reddit.com{submission.permalink}"
 
-                self.state.set_value(cooldown_key, datetime.utcnow().isoformat())
+                self.save(cooldown_key, datetime.utcnow().isoformat())
                 self._save_published_post("reddit", post_url, title)
                 posted.append({"subreddit": subreddit_name, "url": post_url})
-                self.log(f"✅ Reddit post: r/{subreddit_name} — {post_url}")
+                self.log.info(f"✅ Reddit post: r/{subreddit_name} — {post_url}")
 
             except Exception as e:
-                self.log(f"⚠️  Reddit post to r/{subreddit_name} failed: {e}")
+                self.log.warning(f"⚠️  Reddit post to r/{subreddit_name} failed: {e}")
 
         return {"posted": posted}
 
     # ── LinkedIn ─────────────────────────────────────────────────────
-    def _post_to_linkedin(self, config: dict) -> dict:
+    def _post_to_linkedin(self) -> dict:
         """Post a professional insight to LinkedIn."""
         import requests as http
 
@@ -161,19 +161,17 @@ Return JSON:
         person_urn  = os.getenv("LINKEDIN_PERSON_URN", "")  # urn:li:person:XXXXX
 
         if not person_urn:
-            self.log("ℹ️  LINKEDIN_PERSON_URN not set — skipping")
+            self.log.info("ℹ️  LINKEDIN_PERSON_URN not set — skipping")
             return {"skipped": True}
 
-        # Get latest published article for reference
-        published_raw = self.state.get_value("published_articles") or "[]"
-        try:
-            published = json.loads(published_raw)
-        except Exception:
+        # Get latest published article for reference (stored by seo_publisher)
+        published = sm.get_value("seo_publisher", "published_articles", [])
+        if not isinstance(published, list):
             published = []
 
-        latest = published[-1] if published else {}
-        site_name = config.get("site_name", "")
-        site_url  = config.get("target_site_url", "")
+        latest    = published[-1] if published else {}
+        site_name = self.site_name
+        site_url  = self.target_site
 
         prompt = f"""
 Write a short LinkedIn post (150-200 words) for {site_name}.
@@ -227,29 +225,27 @@ Return only the post text, nothing else.
                 post_id  = resp.json().get("id", "")
                 post_url = f"https://www.linkedin.com/feed/update/{post_id}"
                 self._save_published_post("linkedin", post_url, post_text[:80])
-                self.log(f"✅ LinkedIn post published: {post_url}")
+                self.log.info(f"✅ LinkedIn post published: {post_url}")
                 return {"posted": True, "url": post_url}
             else:
-                self.log(f"⚠️  LinkedIn error {resp.status_code}: {resp.text[:200]}")
+                self.log.warning(f"⚠️  LinkedIn error {resp.status_code}: {resp.text[:200]}")
                 return {"error": f"linkedin_{resp.status_code}"}
         except Exception as e:
             return {"error": str(e)}
 
     # ── Quora drafts ─────────────────────────────────────────────────
-    def _generate_quora_drafts(self, config: dict) -> dict:
+    def _generate_quora_drafts(self) -> dict:
         """
         Generate Quora answer drafts. Quora has no public API,
         so drafts are saved for manual posting.
         """
-        site_analysis_raw = self.state.get_value("site_analysis") or "{}"
-        try:
-            site_analysis = json.loads(site_analysis_raw)
-        except Exception:
+        site_analysis = sm.get_value("website_analyzer", "site_analysis", {})
+        if not isinstance(site_analysis, dict):
             site_analysis = {}
 
         keywords  = site_analysis.get("keywords", [])[:5]
-        site_name = config.get("site_name", "")
-        site_url  = config.get("target_site_url", "")
+        site_name = self.site_name
+        site_url  = self.target_site
 
         prompt = f"""
 Generate 3 Quora question-answer pairs for {site_name} ({site_url}).
@@ -274,14 +270,12 @@ Return JSON array:
             end   = raw.rfind("]") + 1
             drafts = json.loads(raw[start:end]) if start >= 0 else []
         except Exception as e:
-            self.log(f"⚠️  Quora draft generation failed: {e}")
+            self.log.warning(f"⚠️  Quora draft generation failed: {e}")
             return {"error": str(e)}
 
         # Save drafts for manual posting
-        existing_raw = self.state.get_value("quora_drafts") or "[]"
-        try:
-            existing = json.loads(existing_raw)
-        except Exception:
+        existing = self.load("quora_drafts", [])
+        if not isinstance(existing, list):
             existing = []
 
         new_drafts = []
@@ -291,17 +285,15 @@ Return JSON array:
             existing.append(d)
             new_drafts.append(d)
 
-        self.state.set_value("quora_drafts", json.dumps(existing[-20:]))  # Keep last 20
-        self.log(f"📝 {len(new_drafts)} Quora answer drafts saved (post manually)")
+        self.save("quora_drafts", existing[-20:])  # Keep last 20
+        self.log.info(f"📝 {len(new_drafts)} Quora answer drafts saved (post manually)")
         return {"drafts_created": len(new_drafts)}
 
     # ── Helpers ──────────────────────────────────────────────────────
     def _save_published_post(self, platform: str, url: str, title: str):
         """Save social post to shared published_social_posts list."""
-        posts_raw = self.state.get_value("published_social_posts") or "[]"
-        try:
-            posts = json.loads(posts_raw)
-        except Exception:
+        posts = self.load("published_social_posts", [])
+        if not isinstance(posts, list):
             posts = []
 
         posts.append({
@@ -310,4 +302,4 @@ Return JSON array:
             "title":        title,
             "published_at": datetime.utcnow().isoformat(),
         })
-        self.state.set_value("published_social_posts", json.dumps(posts[-50:]))
+        self.save("published_social_posts", posts[-50:])

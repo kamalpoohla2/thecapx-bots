@@ -16,15 +16,17 @@ import os
 import json
 from datetime import datetime, timedelta
 from bots.base_bot import BaseBot
+import state_manager as sm
 
 
 class AnalyticsBot(BaseBot):
-    name = "analytics"
+
+    def __init__(self):
+        super().__init__("analytics")
 
     def run(self):
-        self.log("📊 Analytics Bot starting...")
-        config = self.load_config()
-        target_url = config.get("target_site_url", os.getenv("TARGET_SITE_URL", ""))
+        self.log.info("📊 Analytics Bot starting...")
+        target_url = self.target_site
 
         # ── Try GA4 first ───────────────────────────────────────────
         ga4_key_file = os.getenv("GA4_KEY_FILE", "service_account.json")
@@ -33,13 +35,13 @@ class AnalyticsBot(BaseBot):
         if ga4_property and os.path.exists(ga4_key_file):
             report = self._fetch_ga4_report(ga4_property, ga4_key_file)
         else:
-            self.log("ℹ️  GA4 not configured — using lightweight web metrics fallback")
+            self.log.info("ℹ️  GA4 not configured — using lightweight web metrics fallback")
             report = self._lightweight_metrics(target_url)
 
         # ── Save report to state ────────────────────────────────────
         report["generated_at"] = datetime.utcnow().isoformat()
-        self.state.set_value("analytics_report", json.dumps(report))
-        self.log(f"✅ Analytics report saved: {len(report.get('top_pages', []))} pages tracked")
+        self.save("analytics_report", report)
+        self.log.info(f"✅ Analytics report saved: {len(report.get('top_pages', []))} pages tracked")
 
         # ── Feed insights to content generator ─────────────────────
         self._update_content_strategy(report)
@@ -101,7 +103,7 @@ class AnalyticsBot(BaseBot):
                 })
 
             total_sessions = sum(p["sessions"] for p in top_pages)
-            self.log(f"✅ GA4: {total_sessions} sessions, {len(top_pages)} pages")
+            self.log.info(f"✅ GA4: {total_sessions} sessions, {len(top_pages)} pages")
 
             return {
                 "source":        "ga4",
@@ -111,7 +113,7 @@ class AnalyticsBot(BaseBot):
             }
 
         except Exception as e:
-            self.log(f"⚠️  GA4 fetch failed: {e} — falling back to lightweight metrics")
+            self.log.warning(f"⚠️  GA4 fetch failed: {e} — falling back to lightweight metrics")
             return self._lightweight_metrics("")
 
     # ── Lightweight fallback ─────────────────────────────────────────
@@ -124,11 +126,9 @@ class AnalyticsBot(BaseBot):
         """
         import requests as http
 
-        # Get articles we've already published
-        published_raw = self.state.get_value("published_articles") or "[]"
-        try:
-            published = json.loads(published_raw)
-        except Exception:
+        # Get articles we've already published (stored by seo_publisher)
+        published = sm.get_value("seo_publisher", "published_articles", [])
+        if not isinstance(published, list):
             published = []
 
         accessible = []
@@ -149,11 +149,8 @@ class AnalyticsBot(BaseBot):
                 pass
 
         # Ask AI for strategic insights without real numbers
-        config = self.load_config()
-        site_analysis_raw = self.state.get_value("site_analysis") or "{}"
-        try:
-            site_analysis = json.loads(site_analysis_raw)
-        except Exception:
+        site_analysis = sm.get_value("website_analyzer", "site_analysis", {})
+        if not isinstance(site_analysis, dict):
             site_analysis = {}
 
         prompt = f"""
@@ -210,5 +207,5 @@ Format as JSON:
             "updated_at":          datetime.utcnow().isoformat(),
         }
 
-        self.state.set_value("content_strategy", json.dumps(strategy))
-        self.log("📌 Content strategy updated based on analytics")
+        self.save("content_strategy", strategy)
+        self.log.info("📌 Content strategy updated based on analytics")

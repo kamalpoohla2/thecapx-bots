@@ -24,50 +24,47 @@ import json
 import hashlib
 from datetime import datetime
 from bots.base_bot import BaseBot
+import state_manager as sm
 
 
 class AdManagerBot(BaseBot):
-    name = "ad_manager"
+
+    def __init__(self):
+        super().__init__("ad_manager")
 
     def run(self):
-        self.log("📢 Ad Manager Bot starting...")
-        config = self.load_config()
+        self.log.info("📢 Ad Manager Bot starting...")
 
         # ── Step 1: Publish any approved ads ──────────────────────
         published_count = self._publish_approved_ads()
 
         # ── Step 2: Generate new ad drafts ────────────────────────
-        created_count = self._generate_new_ad_drafts(config)
+        created_count = self._generate_new_ad_drafts()
 
-        self.log(f"✅ Ad Manager: {published_count} published, {created_count} new drafts created")
+        self.log.info(f"✅ Ad Manager: {published_count} published, {created_count} new drafts created")
         return {
             "published": published_count,
             "drafts_created": created_count,
         }
 
     # ── Generate new ad drafts ───────────────────────────────────────
-    def _generate_new_ad_drafts(self, config: dict) -> int:
-        site_name = config.get("site_name", os.getenv("SITE_NAME", ""))
-        site_url  = config.get("target_site_url", os.getenv("TARGET_SITE_URL", ""))
+    def _generate_new_ad_drafts(self) -> int:
+        site_name = self.site_name
+        site_url  = self.target_site
 
-        # Get site analysis for context
-        site_analysis_raw = self.state.get_value("site_analysis") or "{}"
-        try:
-            site_analysis = json.loads(site_analysis_raw)
-        except Exception:
+        # Get site analysis for context (stored by website_analyzer)
+        site_analysis = sm.get_value("website_analyzer", "site_analysis", {})
+        if not isinstance(site_analysis, dict):
             site_analysis = {}
 
         # Get content strategy from analytics bot
-        strategy_raw = self.state.get_value("content_strategy") or "{}"
-        try:
-            strategy = json.loads(strategy_raw)
-        except Exception:
+        strategy = sm.get_value("analytics", "content_strategy", {})
+        if not isinstance(strategy, dict):
             strategy = {}
 
         services  = site_analysis.get("services", [])[:5]
         keywords  = site_analysis.get("keywords", [])[:8]
         audience  = site_analysis.get("target_audience", [])[:3]
-        ad_angles = site_analysis.get("ad_angles", [])
 
         prompt = f"""
 You are an expert digital advertising copywriter for {site_name} ({site_url}).
@@ -105,7 +102,7 @@ Example format:
             end   = raw.rfind("]") + 1
             ad_variants = json.loads(raw[start:end]) if start >= 0 else []
         except Exception as e:
-            self.log(f"⚠️  Ad generation failed: {e}")
+            self.log.warning(f"⚠️  Ad generation failed: {e}")
             return 0
 
         created = 0
@@ -119,10 +116,8 @@ Example format:
                 continue
 
             # Save as pending approval
-            pending_ads_raw = self.state.get_value("pending_ads") or "[]"
-            try:
-                pending_ads = json.loads(pending_ads_raw)
-            except Exception:
+            pending_ads = self.load("pending_ads", [])
+            if not isinstance(pending_ads, list):
                 pending_ads = []
 
             ad_entry = {
@@ -135,19 +130,17 @@ Example format:
                 **ad
             }
             pending_ads.append(ad_entry)
-            self.state.set_value("pending_ads", json.dumps(pending_ads))
+            self.save("pending_ads", pending_ads)
             self.mark_done(f"ad_{content_hash}")
             created += 1
-            self.log(f"📝 New ad draft: '{ad.get('headline_1', '')}' [{ad.get('ad_angle', '')}]")
+            self.log.info(f"📝 New ad draft: '{ad.get('headline_1', '')}' [{ad.get('ad_angle', '')}]")
 
         return created
 
     # ── Publish approved ads ─────────────────────────────────────────
     def _publish_approved_ads(self) -> int:
-        pending_ads_raw = self.state.get_value("pending_ads") or "[]"
-        try:
-            pending_ads = json.loads(pending_ads_raw)
-        except Exception:
+        pending_ads = self.load("pending_ads", [])
+        if not isinstance(pending_ads, list):
             return 0
 
         approved = [a for a in pending_ads if a.get("status") == "approved"]
@@ -163,12 +156,12 @@ Example format:
                 ad["published_at"] = datetime.utcnow().isoformat()
                 ad["published_url"] = result.get("url", "")
                 published_count += 1
-                self.log(f"✅ Ad published to {platform}: '{ad.get('headline_1', '')}'")
+                self.log.info(f"✅ Ad published to {platform}: '{ad.get('headline_1', '')}'")
             else:
-                self.log(f"⚠️  Ad publish failed: {result.get('error', 'unknown')}")
+                self.log.warning(f"⚠️  Ad publish failed: {result.get('error', 'unknown')}")
 
         # Save updated list
-        self.state.set_value("pending_ads", json.dumps(pending_ads))
+        self.save("pending_ads", pending_ads)
         return published_count
 
     # ── Platform publishers ──────────────────────────────────────────
@@ -190,13 +183,12 @@ Example format:
         developer_token = os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN", "")
 
         if not customer_id or not developer_token:
-            self.log("ℹ️  Google Ads credentials not set — ad staged for manual upload")
+            self.log.info("ℹ️  Google Ads credentials not set — ad staged for manual upload")
             return {"success": False, "error": "credentials_not_set",
                     "manual_action": "Upload this ad via Google Ads UI"}
 
         # Google Ads API integration would go here
-        # For now, log the ad details for manual upload
-        self.log(f"📋 Google Ad ready for upload:\n"
+        self.log.info(f"📋 Google Ad ready for upload:\n"
                  f"  H1: {ad.get('headline_1')}\n"
                  f"  H2: {ad.get('headline_2')}\n"
                  f"  H3: {ad.get('headline_3')}\n"
@@ -210,7 +202,7 @@ Example format:
         ad_account   = os.getenv("META_AD_ACCOUNT_ID", "")
 
         if not access_token or not ad_account:
-            self.log("ℹ️  Meta Ads credentials not set — ad staged for manual upload")
+            self.log.info("ℹ️  Meta Ads credentials not set — ad staged for manual upload")
             return {"success": False, "error": "credentials_not_set",
                     "manual_action": "Upload this ad via Meta Ads Manager"}
 

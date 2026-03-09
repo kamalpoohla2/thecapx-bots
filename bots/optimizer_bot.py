@@ -14,13 +14,16 @@ import os
 import json
 from datetime import datetime
 from bots.base_bot import BaseBot
+import state_manager as sm
 
 
 class OptimizerBot(BaseBot):
-    name = "optimizer"
+
+    def __init__(self):
+        super().__init__("optimizer")
 
     def run(self):
-        self.log("🧠 Optimizer Bot starting...")
+        self.log.info("🧠 Optimizer Bot starting...")
 
         # ── Gather all performance data ─────────────────────────────
         data = self._gather_performance_data()
@@ -38,53 +41,48 @@ class OptimizerBot(BaseBot):
             "recommendations":  recommendations,
             "applied":          applied,
         }
-        self.state.set_value("optimizer_report", json.dumps(report))
-        self.log(f"✅ Optimizer: {len(applied)} optimizations applied")
+        self.save("optimizer_report", report)
+        self.log.info(f"✅ Optimizer: {len(applied)} optimizations applied")
         return report
 
     # ── Gather data ──────────────────────────────────────────────────
     def _gather_performance_data(self) -> dict:
         """Collect metrics from all other bots."""
-        # Analytics
-        analytics_raw = self.state.get_value("analytics_report") or "{}"
-        try:
-            analytics = json.loads(analytics_raw)
-        except Exception:
+        # Analytics (stored by analytics bot)
+        analytics = sm.get_value("analytics", "analytics_report", {})
+        if not isinstance(analytics, dict):
             analytics = {}
 
-        # Content generator stats
-        published_raw = self.state.get_value("published_articles") or "[]"
-        try:
-            published_articles = json.loads(published_raw)
-        except Exception:
+        # Published articles (stored by seo_publisher)
+        published_articles = sm.get_value("seo_publisher", "published_articles", [])
+        if not isinstance(published_articles, list):
             published_articles = []
 
-        # Pending articles
-        pending_raw = self.state.get_value("pending_articles") or "[]"
-        try:
-            pending_articles = json.loads(pending_raw)
-        except Exception:
+        # Pending articles (stored by content_generator)
+        pending_articles = sm.get_value("content_generator", "pending_articles", [])
+        if not isinstance(pending_articles, list):
             pending_articles = []
 
-        # Social media posts
-        social_raw = self.state.get_value("published_social_posts") or "[]"
-        try:
-            social_posts = json.loads(social_raw)
-        except Exception:
+        # Social media posts (stored by social_media bot)
+        social_posts = sm.get_value("social_media", "published_social_posts", [])
+        if not isinstance(social_posts, list):
             social_posts = []
 
-        # Ad performance
-        ads_raw = self.state.get_value("pending_ads") or "[]"
-        try:
-            ads = json.loads(ads_raw)
-        except Exception:
+        # Ad performance (stored by ad_manager bot)
+        ads = sm.get_value("ad_manager", "pending_ads", [])
+        if not isinstance(ads, list):
             ads = []
 
         published_ads = [a for a in ads if a.get("status") == "published"]
         pending_ads   = [a for a in ads if a.get("status") == "pending_approval"]
 
+        # Content strategy (stored by analytics bot)
+        content_strategy = sm.get_value("analytics", "content_strategy", {})
+        if not isinstance(content_strategy, dict):
+            content_strategy = {}
+
         # Config
-        config = self.load_config()
+        config = self.config
 
         return {
             "articles_published_total": len(published_articles),
@@ -97,16 +95,15 @@ class OptimizerBot(BaseBot):
             "analytics_sessions":       analytics.get("total_sessions", 0),
             "analytics_top_pages":      analytics.get("top_pages", [])[:3],
             "ai_insights":              analytics.get("ai_insights", {}),
-            "content_strategy":         json.loads(self.state.get_value("content_strategy") or "{}"),
+            "content_strategy":         content_strategy,
             "config_articles_per_day":  config.get("bots", {}).get("content_generator", {}).get("articles_per_day", 3),
         }
 
     # ── Generate AI recommendations ──────────────────────────────────
     def _generate_recommendations(self, data: dict) -> list:
         """Ask AI what changes would most improve performance."""
-        config    = self.load_config()
-        site_name = config.get("site_name", "")
-        site_url  = config.get("target_site_url", "")
+        site_name = self.site_name
+        site_url  = self.target_site
 
         prompt = f"""
 You are a growth optimizer for {site_name} ({site_url}).
@@ -145,7 +142,7 @@ Return ONLY a JSON array:
             end   = raw.rfind("]") + 1
             return json.loads(raw[start:end]) if start >= 0 else []
         except Exception as e:
-            self.log(f"⚠️  Recommendation generation failed: {e}")
+            self.log.warning(f"⚠️  Recommendation generation failed: {e}")
             return []
 
     # ── Apply safe optimizations ─────────────────────────────────────
@@ -154,12 +151,12 @@ Return ONLY a JSON array:
         Apply optimizations that are safe to automate.
         High-impact or risky changes are saved for human review.
         """
-        config  = self.load_config()
+        config  = self.config
         applied = []
 
         for rec in recommendations:
             if not rec.get("auto_apply", False):
-                self.log(f"📋 Recommendation (needs review): {rec.get('action')} — {rec.get('reason', '')[:80]}")
+                self.log.info(f"📋 Recommendation (needs review): {rec.get('action')} — {rec.get('reason', '')[:80]}")
                 continue
 
             action = rec.get("action", "")
@@ -177,32 +174,33 @@ Return ONLY a JSON array:
                         config["bots"]["content_generator"]["articles_per_day"] = new_val
                         self._save_config(config)
                         applied.append({"action": action, "old": current, "new": new_val})
-                        self.log(f"⚡ Auto-applied: articles/day {current} → {new_val}")
+                        self.log.info(f"⚡ Auto-applied: articles/day {current} → {new_val}")
 
                 elif action == "update_focus_keywords":
-                    strategy = json.loads(self.state.get_value("content_strategy") or "{}")
+                    strategy = sm.get_value("analytics", "content_strategy", {})
+                    if not isinstance(strategy, dict):
+                        strategy = {}
                     strategy["focus_keywords"] = value if isinstance(value, list) else [value]
                     strategy["updated_at"] = datetime.utcnow().isoformat()
-                    self.state.set_value("content_strategy", json.dumps(strategy))
+                    sm.set_value("analytics", "content_strategy", strategy)
                     applied.append({"action": action, "value": value})
-                    self.log(f"⚡ Auto-applied: focus keywords updated")
+                    self.log.info(f"⚡ Auto-applied: focus keywords updated")
 
                 else:
                     # Unknown action — save for review
-                    self.log(f"📋 Unknown action '{action}' — saved for review")
+                    self.log.info(f"📋 Unknown action '{action}' — saved for review")
 
             except Exception as e:
-                self.log(f"⚠️  Failed to apply {action}: {e}")
+                self.log.warning(f"⚠️  Failed to apply {action}: {e}")
 
         # Save pending recommendations for dashboard
         pending_recs = [r for r in recommendations if not r.get("auto_apply", False)]
-        self.state.set_value("pending_recommendations", json.dumps(pending_recs))
+        self.save("pending_recommendations", pending_recs)
 
         return applied
 
     def _save_config(self, config: dict):
         """Save updated config back to config.json."""
-        import os
         config_path = os.path.join(os.path.dirname(__file__), "..", "config.json")
         with open(os.path.normpath(config_path), "w") as f:
             json.dump(config, f, indent=2)

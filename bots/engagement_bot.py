@@ -18,35 +18,36 @@ import os
 import json
 from datetime import datetime, timedelta
 from bots.base_bot import BaseBot
+import state_manager as sm
 
 
 class EngagementBot(BaseBot):
-    name = "engagement"
+
+    def __init__(self):
+        super().__init__("engagement")
 
     def run(self):
-        self.log("💌 Engagement Bot starting...")
+        self.log.info("💌 Engagement Bot starting...")
 
         # Check if we already sent a digest this week
-        last_sent = self.state.get_value("last_digest_sent") or ""
+        last_sent = self.load("last_digest_sent", "")
         if last_sent:
             try:
                 last_dt = datetime.fromisoformat(last_sent)
                 days_since = (datetime.utcnow() - last_dt).days
                 if days_since < 6:
-                    self.log(f"⏭️  Digest sent {days_since} days ago — skipping (sends weekly)")
+                    self.log.info(f"⏭️  Digest sent {days_since} days ago — skipping (sends weekly)")
                     return {"skipped": True, "reason": "already_sent_this_week"}
             except Exception:
                 pass
 
-        # Load recent published articles
-        published_raw = self.state.get_value("published_articles") or "[]"
-        try:
-            published = json.loads(published_raw)
-        except Exception:
+        # Load recent published articles (stored by seo_publisher)
+        published = sm.get_value("seo_publisher", "published_articles", [])
+        if not isinstance(published, list):
             published = []
 
         if not published:
-            self.log("⏭️  No published articles yet — skipping digest")
+            self.log.info("⏭️  No published articles yet — skipping digest")
             return {"skipped": True, "reason": "no_articles"}
 
         # Pick top 3 most recent articles
@@ -57,17 +58,16 @@ class EngagementBot(BaseBot):
         )[:3]
 
         # Generate digest email content
-        config     = self.load_config()
-        site_name  = config.get("site_name", os.getenv("SITE_NAME", "Our Site"))
-        site_url   = config.get("target_site_url", os.getenv("TARGET_SITE_URL", ""))
+        site_name  = self.site_name
+        site_url   = self.target_site
         email_body = self._compose_digest(site_name, site_url, recent)
 
         # Send email
         result = self._send_digest(site_name, email_body)
 
         # Mark as sent
-        self.state.set_value("last_digest_sent", datetime.utcnow().isoformat())
-        self.log(f"✅ Engagement digest: {result.get('status', 'done')}")
+        self.save("last_digest_sent", datetime.utcnow().isoformat())
+        self.log.info(f"✅ Engagement digest: {result.get('status', 'done')}")
         return result
 
     # ── Compose digest ───────────────────────────────────────────────
@@ -130,11 +130,11 @@ Requirements:
             "body":       body,
             "created_at": datetime.utcnow().isoformat(),
         }
-        self.state.set_value("latest_digest_draft", json.dumps(draft))
-        self.log(f"📝 Digest draft saved: '{subject}'")
+        self.save("latest_digest_draft", draft)
+        self.log.info(f"📝 Digest draft saved: '{subject}'")
 
         if not brevo_key or not from_email or not notify_email:
-            self.log("ℹ️  BREVO_API_KEY / FROM_EMAIL / NOTIFICATION_EMAIL not set — draft saved only")
+            self.log.info("ℹ️  BREVO_API_KEY / FROM_EMAIL / NOTIFICATION_EMAIL not set — draft saved only")
             return {"status": "draft_only", "subject": subject}
 
         # Send via Brevo Transactional Email API
@@ -158,11 +158,11 @@ Requirements:
                 timeout=15
             )
             if resp.status_code in (200, 201):
-                self.log(f"✉️  Digest email sent to {notify_email}")
+                self.log.info(f"✉️  Digest email sent to {notify_email}")
                 return {"status": "sent", "subject": subject}
             else:
-                self.log(f"⚠️  Brevo error {resp.status_code}: {resp.text[:200]}")
+                self.log.warning(f"⚠️  Brevo error {resp.status_code}: {resp.text[:200]}")
                 return {"status": "brevo_error", "code": resp.status_code}
         except Exception as e:
-            self.log(f"⚠️  Email send failed: {e}")
+            self.log.warning(f"⚠️  Email send failed: {e}")
             return {"status": "error", "error": str(e)}
