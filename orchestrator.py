@@ -40,10 +40,20 @@ def _load_bots():
     from bots.website_analyzer  import WebsiteAnalyzerBot
     from bots.content_generator import ContentGeneratorBot
     from bots.seo_publisher      import SeoPublisherBot
+    from bots.analytics_bot      import AnalyticsBot
+    from bots.engagement_bot     import EngagementBot
+    from bots.ad_manager_bot     import AdManagerBot
+    from bots.social_media_bot   import SocialMediaBot
+    from bots.optimizer_bot      import OptimizerBot
     return {
-        "analyze": WebsiteAnalyzerBot,
-        "content": ContentGeneratorBot,
-        "publish": SeoPublisherBot,
+        "analyze":  WebsiteAnalyzerBot,
+        "content":  ContentGeneratorBot,
+        "publish":  SeoPublisherBot,
+        "analytics": AnalyticsBot,
+        "engage":   EngagementBot,
+        "ads":      AdManagerBot,
+        "social":   SocialMediaBot,
+        "optimize": OptimizerBot,
     }
 
 
@@ -319,7 +329,9 @@ def main():
 
     # run command
     p_run = subparsers.add_parser("run", help="Run a bot")
-    p_run.add_argument("target", choices=["all", "analyze", "content", "publish"],
+    p_run.add_argument("target",
+                       choices=["all", "analyze", "content", "publish",
+                                "analytics", "engage", "ads", "social", "optimize"],
                        help="Which bot to run")
 
     # schedule command

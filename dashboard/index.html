@@ -13,16 +13,17 @@
       --red:   #ef4444;
       --yellow:#eab308;
       --blue:  #3b82f6;
+      --purple:#a855f7;
       --text:  #e2e8f0;
       --muted: #94a3b8;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; padding: 24px; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; padding: 24px; max-width: 1200px; margin: 0 auto; }
 
     h1  { font-size: 1.6rem; margin-bottom: 4px; }
     .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
 
     .card {
       background: var(--card);
@@ -38,12 +39,13 @@
     .red    { color: var(--red); }
     .yellow { color: var(--yellow); }
     .blue   { color: var(--blue); }
+    .purple { color: var(--purple); }
 
     h2 { font-size: 1.1rem; margin-bottom: 12px; color: var(--muted); }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th    { text-align: left; padding: 10px 14px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
-    td    { padding: 10px 14px; border-bottom: 1px solid #1e2130; }
+    td    { padding: 10px 14px; border-bottom: 1px solid #1e2130; vertical-align: top; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #1e2130; }
 
@@ -58,6 +60,7 @@
     .badge-red    { background: #450a0a; color: var(--red);   }
     .badge-yellow { background: #422006; color: var(--yellow);}
     .badge-blue   { background: #1e3a5f; color: var(--blue);  }
+    .badge-purple { background: #3b0764; color: var(--purple);}
 
     .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
 
@@ -89,13 +92,77 @@
     }
     .refresh-btn:hover { background: #2563eb; }
 
+    /* Ad approval buttons */
+    .approve-btn {
+      background: #14532d;
+      border: 1px solid var(--green);
+      color: var(--green);
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      margin-right: 6px;
+    }
+    .reject-btn {
+      background: #450a0a;
+      border: 1px solid var(--red);
+      color: var(--red);
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .approve-btn:hover { background: #166534; }
+    .reject-btn:hover  { background: #7f1d1d; }
+
+    .ad-preview {
+      background: #090b14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+    }
+    .ad-headline { color: #60a5fa; font-weight: 600; margin-bottom: 4px; }
+    .ad-desc     { color: var(--muted); margin-bottom: 8px; }
+    .ad-angle    { font-size: 0.75rem; color: var(--purple); }
+
+    .alert-banner {
+      background: #422006;
+      border: 1px solid var(--yellow);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--yellow);
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+
     footer { color: var(--muted); font-size: 0.78rem; margin-top: 32px; text-align: center; }
+
+    .tab-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .tab-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .tab-btn.active { background: #1e3a5f; border-color: var(--blue); color: var(--blue); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
   </style>
 </head>
 <body>
 
 <h1>⚡ CapX Bot Dashboard</h1>
 <p class="subtitle" id="subtitle">Target: <strong>https://www.thecapx.in</strong> &nbsp;·&nbsp; Last refreshed: <span id="refresh-time">—</span></p>
+
+<!-- ── Action Required Banner ─────────────────────────────────────── -->
+<div id="action-banner" class="alert-banner" style="display:none">
+  ⚠️ <strong>Action Required:</strong> <span id="action-text"></span>
+</div>
 
 <!-- ── Stats Cards ──────────────────────────────────────────────── -->
 <div class="grid">
@@ -110,9 +177,19 @@
     <div class="sub">Across all platforms</div>
   </div>
   <div class="card">
-    <div class="label">Pending Articles</div>
-    <div class="value yellow" id="stat-pending">—</div>
-    <div class="sub">Ready to publish</div>
+    <div class="label">Ads Pending Approval</div>
+    <div class="value yellow" id="stat-ads-pending">—</div>
+    <div class="sub">Click to review below</div>
+  </div>
+  <div class="card">
+    <div class="label">Social Posts</div>
+    <div class="value purple" id="stat-social">—</div>
+    <div class="sub">Reddit + LinkedIn</div>
+  </div>
+  <div class="card">
+    <div class="label">Traffic Sessions</div>
+    <div class="value" id="stat-sessions">—</div>
+    <div class="sub">Last 28 days</div>
   </div>
   <div class="card">
     <div class="label">Bot Runs (total)</div>
@@ -121,81 +198,188 @@
   </div>
 </div>
 
-<!-- ── Site Analysis ─────────────────────────────────────────────── -->
-<div class="section">
-  <h2>🔍 Site Analysis <button class="refresh-btn" onclick="loadStatus()">↻ Refresh</button></h2>
-  <table>
-    <tr><th>Field</th><th>Value</th></tr>
-    <tr><td>Services Found</td><td id="ana-services">—</td></tr>
-    <tr><td>Target Audience</td><td id="ana-audience">—</td></tr>
-    <tr><td>Top Keywords</td><td id="ana-keywords">—</td></tr>
-    <tr><td>Unique Value</td><td id="ana-value">—</td></tr>
-    <tr><td>Last Crawl</td><td id="ana-time">—</td></tr>
-  </table>
+<!-- ── Tabs ───────────────────────────────────────────────────────── -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('overview')">📊 Overview</button>
+  <button class="tab-btn" onclick="switchTab('ads')">📢 Ad Approvals</button>
+  <button class="tab-btn" onclick="switchTab('quora')">💬 Quora Drafts</button>
+  <button class="tab-btn" onclick="switchTab('commands')">⌨️ Commands</button>
 </div>
 
-<!-- ── Run History ───────────────────────────────────────────────── -->
-<div class="section">
-  <h2>📋 Recent Bot Runs</h2>
-  <table>
-    <thead><tr><th>Bot</th><th>Status</th><th>Started</th><th>Error</th></tr></thead>
-    <tbody id="run-table"><tr><td colspan="4" style="color:var(--muted)">Loading...</td></tr></tbody>
-  </table>
+<!-- ── Tab: Overview ─────────────────────────────────────────────── -->
+<div id="tab-overview" class="tab-pane active">
+
+  <!-- Site Analysis -->
+  <div class="section">
+    <h2>🔍 Site Analysis <button class="refresh-btn" onclick="loadStatus()">↻ Refresh</button></h2>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>Services Found</td><td id="ana-services">—</td></tr>
+      <tr><td>Target Audience</td><td id="ana-audience">—</td></tr>
+      <tr><td>Top Keywords</td><td id="ana-keywords">—</td></tr>
+      <tr><td>Unique Value</td><td id="ana-value">—</td></tr>
+      <tr><td>Last Crawl</td><td id="ana-time">—</td></tr>
+    </table>
+  </div>
+
+  <!-- Analytics Insights -->
+  <div class="section">
+    <h2>📈 Analytics Insights</h2>
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Best Content Types</td><td id="ana-content-types">—</td></tr>
+      <tr><td>Top Traffic Channels</td><td id="ana-channels">—</td></tr>
+      <tr><td>Quick SEO Win</td><td id="ana-quick-win">—</td></tr>
+    </table>
+  </div>
+
+  <!-- Recent Bot Runs -->
+  <div class="section">
+    <h2>📋 Recent Bot Runs</h2>
+    <table>
+      <thead><tr><th>Bot</th><th>Status</th><th>Started</th><th>Error</th></tr></thead>
+      <tbody id="run-table"><tr><td colspan="4" style="color:var(--muted)">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Recently Published Articles -->
+  <div class="section">
+    <h2>🌐 Recently Published Articles</h2>
+    <div id="published-list" style="color:var(--muted);font-size:.88rem">
+      Run the bots first to see published articles here.
+    </div>
+  </div>
+
+  <!-- Social Media Posts -->
+  <div class="section">
+    <h2>📱 Recent Social Posts</h2>
+    <div id="social-list" style="color:var(--muted);font-size:.88rem">
+      No social posts yet. Add Reddit/LinkedIn credentials to enable.
+    </div>
+  </div>
+
 </div>
 
-<!-- ── Quick Commands ─────────────────────────────────────────────── -->
-<div class="section">
-  <h2>⌨️ Quick Commands &nbsp;<small style="color:var(--muted);font-weight:400">(click to copy)</small></h2>
+<!-- ── Tab: Ad Approvals ──────────────────────────────────────────── -->
+<div id="tab-ads" class="tab-pane">
+  <div class="section">
+    <h2>📢 Ads Pending Your Approval
+      <span style="color:var(--muted);font-weight:400;font-size:0.85rem">&nbsp;— Review each ad before it goes live</span>
+    </h2>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:16px">
+      ℹ️ No ad is ever published without your explicit approval. Review below and click Approve or Reject.
+    </p>
+    <div id="ads-list">
+      <p style="color:var(--muted)">No ads pending approval.</p>
+    </div>
+  </div>
 
-  <div class="cmd-label">Run all bots now</div>
-  <div class="cmd-box" onclick="copy(this)">python orchestrator.py run all</div>
-
-  <div class="cmd-label">Run only content generator</div>
-  <div class="cmd-box" onclick="copy(this)">python orchestrator.py run content</div>
-
-  <div class="cmd-label">Publish pending articles</div>
-  <div class="cmd-box" onclick="copy(this)">python orchestrator.py run publish</div>
-
-  <div class="cmd-label">⚡ Switch ALL bots to a new site</div>
-  <div class="cmd-box" onclick="copy(this)">python orchestrator.py switch https://www.yournewsite.com</div>
-
-  <div class="cmd-label">Check status</div>
-  <div class="cmd-box" onclick="copy(this)">python orchestrator.py status</div>
-
-  <div class="cmd-label">Start continuous scheduler (if you have a server)</div>
-  <div class="cmd-box" onclick="copy(this)">python orchestrator.py schedule</div>
+  <div class="section">
+    <h2>✅ Approved Ads</h2>
+    <div id="ads-approved-list" style="color:var(--muted);font-size:.88rem">No approved ads yet.</div>
+  </div>
 </div>
 
-<!-- ── Published URLs ─────────────────────────────────────────────── -->
-<div class="section">
-  <h2>🌐 Recently Published</h2>
-  <div id="published-list" style="color:var(--muted);font-size:.88rem">
-    Run the bots first to see published articles here.
+<!-- ── Tab: Quora Drafts ──────────────────────────────────────────── -->
+<div id="tab-quora" class="tab-pane">
+  <div class="section">
+    <h2>💬 Quora Answer Drafts
+      <span style="color:var(--muted);font-weight:400;font-size:0.85rem">&nbsp;— Copy and post manually to Quora</span>
+    </h2>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:16px">
+      ℹ️ Quora has no public API. These drafts are generated for you to post manually.
+      Copy each answer and post it at quora.com when you find the matching question.
+    </p>
+    <div id="quora-list">
+      <p style="color:var(--muted)">No Quora drafts yet. Run the social media bot first.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tab: Commands ─────────────────────────────────────────────── -->
+<div id="tab-commands" class="tab-pane">
+  <div class="section">
+    <h2>⌨️ Quick Commands &nbsp;<small style="color:var(--muted);font-weight:400">(click to copy)</small></h2>
+
+    <div class="cmd-label">Run ALL bots (full pipeline)</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run all</div>
+
+    <div class="cmd-label">Analyze site only</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run analyze</div>
+
+    <div class="cmd-label">Generate SEO articles</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run content</div>
+
+    <div class="cmd-label">Publish pending articles</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run publish</div>
+
+    <div class="cmd-label">Run analytics report</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run analytics</div>
+
+    <div class="cmd-label">Send engagement email digest</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run engage</div>
+
+    <div class="cmd-label">Generate ad drafts (you approve before publish)</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run ads</div>
+
+    <div class="cmd-label">Post to Reddit + LinkedIn</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run social</div>
+
+    <div class="cmd-label">Run optimizer (auto-tune settings)</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py run optimize</div>
+
+    <div class="cmd-label">⚡ Switch ALL bots to a new site</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py switch https://www.yournewsite.com</div>
+
+    <div class="cmd-label">Check status of all bots</div>
+    <div class="cmd-box" onclick="copy(this)">python orchestrator.py status</div>
   </div>
 </div>
 
 <footer>CapX Bot System · All services free · <a href="https://ai.google.dev" style="color:var(--blue)">Gemini AI</a> · <a href="https://github.com" style="color:var(--blue)">GitHub Actions</a> · <a href="https://supabase.com" style="color:var(--blue)">Supabase</a></footer>
 
 <script>
-// ── Load status from bot_state.db via a simple JSON file ─────────
-// The orchestrator writes dashboard_data.json each run
+// ─────────────────────────────────────────────────────────────────
+//  Tabs
+// ─────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
 
+// ─────────────────────────────────────────────────────────────────
+//  Load status from dashboard_data.json
+// ─────────────────────────────────────────────────────────────────
 async function loadStatus() {
   document.getElementById("refresh-time").textContent = new Date().toLocaleTimeString();
 
   try {
-    // Try to load the JSON data file written by the orchestrator
     const res = await fetch("../dashboard_data.json?" + Date.now());
     if (!res.ok) throw new Error("No data yet");
     const d = await res.json();
 
     // Stats
-    document.getElementById("stat-generated").textContent = d.articles_generated ?? "—";
-    document.getElementById("stat-published").textContent = d.articles_published ?? "—";
-    document.getElementById("stat-pending").textContent   = d.articles_pending   ?? "—";
-    document.getElementById("stat-runs").textContent      = d.total_runs         ?? "—";
+    document.getElementById("stat-generated").textContent  = d.articles_generated ?? "—";
+    document.getElementById("stat-published").textContent  = d.articles_published  ?? "—";
+    document.getElementById("stat-runs").textContent       = d.total_runs          ?? "—";
+    document.getElementById("stat-sessions").textContent   = d.traffic_sessions ?? (d.analytics?.total_sessions ?? "—");
 
-    // Analysis
+    // Ads pending
+    const pendingAds = (d.pending_ads || []).filter(a => a.status === "pending_approval");
+    document.getElementById("stat-ads-pending").textContent = pendingAds.length || "0";
+    if (pendingAds.length > 0) {
+      document.getElementById("action-banner").style.display = "block";
+      document.getElementById("action-text").textContent =
+        `${pendingAds.length} ad(s) waiting for your approval — click the "Ad Approvals" tab.`;
+    }
+
+    // Social posts
+    const socialPosts = d.published_social_posts || [];
+    document.getElementById("stat-social").textContent = socialPosts.length || "0";
+
+    // Site Analysis
     const a = d.site_analysis ?? {};
     document.getElementById("ana-services").textContent = (a.services ?? []).slice(0,5).join(", ") || "—";
     document.getElementById("ana-audience").textContent = (a.target_audience ?? []).slice(0,3).join(", ") || "—";
@@ -203,7 +387,13 @@ async function loadStatus() {
     document.getElementById("ana-value").textContent    = (a.unique_value ?? "").slice(0,120) || "—";
     document.getElementById("ana-time").textContent     = d.last_crawl ?? "—";
 
-    // Runs table
+    // Analytics insights
+    const insights = d.analytics?.ai_insights ?? {};
+    document.getElementById("ana-content-types").textContent = (insights.best_content_types ?? []).join(", ") || "—";
+    document.getElementById("ana-channels").textContent      = (insights.top_channels ?? []).join(", ") || "—";
+    document.getElementById("ana-quick-win").textContent     = insights.quick_win ?? "—";
+
+    // Bot runs table
     const tbody = document.getElementById("run-table");
     tbody.innerHTML = "";
     (d.recent_runs ?? []).forEach(r => {
@@ -218,11 +408,17 @@ async function loadStatus() {
         <td style="color:var(--red)">${error}</td>
       </tr>`;
     });
+    if (!tbody.innerHTML) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:var(--yellow)">
+        ⚠️ No runs yet. Run <code style="background:#090b14;padding:2px 6px;border-radius:4px">python orchestrator.py run all</code> first.
+      </td></tr>`;
+    }
 
-    // Published list
+    // Published articles
     const pub = d.published_urls ?? [];
+    const pubDiv = document.getElementById("published-list");
     if (pub.length) {
-      document.getElementById("published-list").innerHTML = pub.slice(0,10).map(p =>
+      pubDiv.innerHTML = pub.slice(0,10).map(p =>
         `<div style="margin:6px 0">
           <a href="${p.url}" target="_blank" style="color:var(--blue)">${p.title || p.url}</a>
           <span style="color:var(--muted);font-size:.78rem"> · ${p.platform} · ${(p.published_at||"").slice(0,10)}</span>
@@ -230,8 +426,25 @@ async function loadStatus() {
       ).join("");
     }
 
+    // Social posts
+    const socialDiv = document.getElementById("social-list");
+    if (socialPosts.length) {
+      socialDiv.innerHTML = socialPosts.slice(0,10).map(p =>
+        `<div style="margin:6px 0">
+          <span class="badge badge-purple">${p.platform}</span>
+          <a href="${p.url}" target="_blank" style="color:var(--blue);margin-left:8px">${p.title || p.url}</a>
+          <span style="color:var(--muted);font-size:.78rem"> · ${(p.published_at||"").slice(0,10)}</span>
+        </div>`
+      ).join("");
+    }
+
+    // Ad approvals
+    renderAds(d.pending_ads || []);
+
+    // Quora drafts
+    renderQuoraDrafts(d.quora_drafts || []);
+
   } catch(e) {
-    // Show helpful message if data file not found
     document.getElementById("run-table").innerHTML =
       `<tr><td colspan="4" style="color:var(--yellow)">
         ⚠️ No data yet. Run <code style="background:#090b14;padding:2px 6px;border-radius:4px">python orchestrator.py run all</code> first.
@@ -239,6 +452,99 @@ async function loadStatus() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────
+//  Render ad approval cards
+// ─────────────────────────────────────────────────────────────────
+function renderAds(ads) {
+  const pending  = ads.filter(a => a.status === "pending_approval");
+  const approved = ads.filter(a => a.status === "approved" || a.status === "published");
+
+  const pendingDiv = document.getElementById("ads-list");
+  if (pending.length === 0) {
+    pendingDiv.innerHTML = `<p style="color:var(--muted)">No ads pending approval. Run <code style="background:#090b14;padding:2px 6px;border-radius:4px">python orchestrator.py run ads</code> to generate drafts.</p>`;
+  } else {
+    pendingDiv.innerHTML = pending.map(ad => `
+      <div class="ad-preview" id="ad-${ad.id}">
+        <div class="ad-headline">${ad.headline_1} | ${ad.headline_2} | ${ad.headline_3}</div>
+        <div class="ad-desc">${ad.description_1}</div>
+        <div class="ad-desc">${ad.description_2}</div>
+        <div class="ad-angle">Angle: ${ad.ad_angle} &nbsp;·&nbsp; ${ad.type} &nbsp;·&nbsp; Created: ${(ad.created_at||"").slice(0,10)}</div>
+        <div style="margin-top:10px">
+          <button class="approve-btn" onclick="approveAd('${ad.id}')">✅ Approve</button>
+          <button class="reject-btn"  onclick="rejectAd('${ad.id}')">❌ Reject</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  const approvedDiv = document.getElementById("ads-approved-list");
+  if (approved.length === 0) {
+    approvedDiv.innerHTML = `<p style="color:var(--muted)">No approved ads yet.</p>`;
+  } else {
+    approvedDiv.innerHTML = approved.map(ad =>
+      `<div style="margin:8px 0;font-size:.85rem">
+        <span class="badge badge-green">${ad.status}</span>
+        <span style="margin-left:8px">${ad.headline_1}</span>
+        <span style="color:var(--muted);font-size:.78rem"> · ${ad.ad_angle} · ${(ad.created_at||"").slice(0,10)}</span>
+      </div>`
+    ).join("");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  Ad approve / reject (writes to dashboard_approvals.json)
+// ─────────────────────────────────────────────────────────────────
+function approveAd(id) {
+  saveApproval(id, 'approved');
+  const el = document.getElementById('ad-' + id);
+  if (el) { el.style.borderColor = 'var(--green)'; el.style.opacity = '0.6'; }
+  alert(`✅ Ad ${id} approved! It will be published on next bot run.`);
+}
+function rejectAd(id) {
+  saveApproval(id, 'rejected');
+  const el = document.getElementById('ad-' + id);
+  if (el) el.remove();
+}
+function saveApproval(id, status) {
+  // Approvals are stored in localStorage and picked up by the bot
+  const approvals = JSON.parse(localStorage.getItem('ad_approvals') || '{}');
+  approvals[id] = { status, decided_at: new Date().toISOString() };
+  localStorage.setItem('ad_approvals', JSON.stringify(approvals));
+  // Also write to a file the bot reads (via fetch POST if a local server is running)
+  fetch('../ad_approvals.json', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(approvals)
+  }).catch(() => {/* no server running — approvals stored in localStorage only */});
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  Render Quora drafts
+// ─────────────────────────────────────────────────────────────────
+function renderQuoraDrafts(drafts) {
+  const div = document.getElementById("quora-list");
+  if (!drafts.length) {
+    div.innerHTML = `<p style="color:var(--muted)">No Quora drafts yet. Run <code style="background:#090b14;padding:2px 6px;border-radius:4px">python orchestrator.py run social</code> to generate.</p>`;
+    return;
+  }
+  div.innerHTML = drafts.slice(-10).reverse().map((d, i) => `
+    <div style="margin-bottom:20px;border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <div style="color:var(--blue);font-weight:600;margin-bottom:8px">Q: ${d.question}</div>
+      <div style="color:var(--text);font-size:.85rem;white-space:pre-wrap;line-height:1.6">${d.answer}</div>
+      <div style="margin-top:10px">
+        <button class="approve-btn" onclick="copyText(\`${d.answer.replace(/`/g,"'")}\`)">📋 Copy Answer</button>
+        <span style="color:var(--muted);font-size:.78rem;margin-left:10px">${(d.created_at||"").slice(0,10)}</span>
+      </div>
+    </div>
+  `).join("");
+}
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => alert("Answer copied to clipboard!"));
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  Copy command to clipboard
+// ─────────────────────────────────────────────────────────────────
 function copy(el) {
   navigator.clipboard.writeText(el.textContent.trim()).then(() => {
     const orig = el.style.borderColor;
