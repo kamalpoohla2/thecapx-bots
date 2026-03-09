@@ -84,8 +84,25 @@ jobs:
         if: always()   # Run even if previous step failed
         run: python orchestrator.py status
 
-      # ── 7. Upload SQLite database as artifact (backup) ────────
-      #     This lets you download the database from GitHub if needed
+      # ── 7. Generate dashboard data ─────────────────────────────
+      - name: Generate dashboard data
+        if: always()
+        run: python orchestrator.py export-dashboard
+
+      # ── 8. Upload dashboard as artifact (download & open locally) ──
+      #     Download the "dashboard" artifact from GitHub Actions,
+      #     extract the zip, and open index.html in your browser.
+      - name: Upload dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-run-${{ github.run_number }}
+          path: |
+            dashboard/index.html
+            dashboard_data.json
+          retention-days: 7
+
+      # ── 9. Upload SQLite database as artifact (backup) ────────
       - name: Upload database backup
         if: always()
         uses: actions/upload-artifact@v4

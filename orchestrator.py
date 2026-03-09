@@ -190,6 +190,82 @@ def cmd_status():
 
 
 # ─────────────────────────────────────────────────────────────────
+#  Dashboard export command — generates dashboard_data.json
+# ─────────────────────────────────────────────────────────────────
+
+def cmd_export_dashboard():
+    """
+    Generate dashboard_data.json from the current bot state.
+    The dashboard/index.html reads this file to show live data.
+    """
+    import state_manager as sm
+    import json, os
+    from datetime import datetime
+
+    log = logging.getLogger("Orchestrator")
+    log.info("📊 Generating dashboard_data.json...")
+
+    # Gather all data
+    site_analysis      = sm.get_value("website_analyzer", "site_analysis", {})
+    published_articles = sm.get_value("seo_publisher",    "published_articles", [])
+    pending_articles   = sm.get_value("content_generator","pending_articles", [])
+    analytics_report   = sm.get_value("analytics",        "analytics_report", {})
+    content_strategy   = sm.get_value("analytics",        "content_strategy", {})
+    pending_ads        = sm.get_value("ad_manager",        "pending_ads", [])
+    social_posts       = sm.get_value("social_media",      "published_social_posts", [])
+    quora_drafts       = sm.get_value("social_media",      "quora_drafts", [])
+    optimizer_report   = sm.get_value("optimizer",         "optimizer_report", {})
+    last_crawl         = sm.get_value("website_analyzer",  "last_crawl_time", "")
+    recent_runs        = sm.get_run_summary()
+
+    # Published URLs from the published_urls table
+    published_urls = []
+    try:
+        import sqlite3
+        db_path = os.path.join(os.path.dirname(__file__), "bot_state.db")
+        if os.path.exists(db_path):
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT url, platform, title, published_at FROM published_urls ORDER BY published_at DESC LIMIT 20"
+            ).fetchall()
+            conn.close()
+            published_urls = [dict(r) for r in rows]
+    except Exception as e:
+        log.warning(f"Could not read published_urls: {e}")
+
+    data = {
+        "generated_at":         datetime.utcnow().isoformat(),
+        "target_site":          os.getenv("TARGET_SITE_URL", ""),
+        "site_name":            os.getenv("SITE_NAME", ""),
+        "site_analysis":        site_analysis if isinstance(site_analysis, dict) else {},
+        "last_crawl":           last_crawl,
+        "articles_generated":   len(pending_articles) + len(published_articles),
+        "articles_published":   len(published_articles),
+        "pending_ads":          pending_ads if isinstance(pending_ads, list) else [],
+        "published_social_posts": social_posts if isinstance(social_posts, list) else [],
+        "quora_drafts":         quora_drafts if isinstance(quora_drafts, list) else [],
+        "analytics":            analytics_report if isinstance(analytics_report, dict) else {},
+        "content_strategy":     content_strategy if isinstance(content_strategy, dict) else {},
+        "optimizer_report":     optimizer_report if isinstance(optimizer_report, dict) else {},
+        "published_urls":       published_urls,
+        "recent_runs":          recent_runs,
+        "total_runs":           len(recent_runs),
+        "traffic_sessions":     (analytics_report or {}).get("total_sessions", 0),
+    }
+
+    out_path = os.path.join(os.path.dirname(__file__), "dashboard_data.json")
+    with open(out_path, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+
+    log.info(f"✅ dashboard_data.json written ({os.path.getsize(out_path)} bytes)")
+    log.info(f"   Articles: {data['articles_published']} published, {data['articles_generated']} total")
+    log.info(f"   Ads pending approval: {len([a for a in data['pending_ads'] if a.get('status')=='pending_approval'])}")
+    log.info(f"   Social posts: {len(data['published_social_posts'])}")
+    log.info(f"   Quora drafts: {len(data['quora_drafts'])}")
+
+
+# ─────────────────────────────────────────────────────────────────
 #  ⚡ Switch site command — THE KEY FEATURE
 # ─────────────────────────────────────────────────────────────────
 
@@ -340,6 +416,9 @@ def main():
     # status command
     subparsers.add_parser("status", help="Show last run status of all bots")
 
+    # export-dashboard command
+    subparsers.add_parser("export-dashboard", help="Generate dashboard_data.json for the web dashboard")
+
     # switch command
     p_switch = subparsers.add_parser("switch", help="Switch all bots to a new site")
     p_switch.add_argument("url",  help="New target site URL")
@@ -353,6 +432,8 @@ def main():
         cmd_schedule()
     elif args.command == "status":
         cmd_status()
+    elif args.command == "export-dashboard":
+        cmd_export_dashboard()
     elif args.command == "switch":
         cmd_switch(args.url, args.name)
 
