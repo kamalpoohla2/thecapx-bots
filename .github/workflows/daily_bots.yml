@@ -89,17 +89,15 @@ jobs:
         if: always()
         run: python orchestrator.py export-dashboard
 
-      # ── 8. Upload dashboard as artifact (download & open locally) ──
-      #     Download the "dashboard" artifact from GitHub Actions,
-      #     extract the zip, and open index.html in your browser.
+      # ── 8. Upload dashboard as artifact (one file, open directly) ──
+      #     Download "dashboard-run-N" artifact, extract zip,
+      #     and double-click dashboard.html — no server needed.
       - name: Upload dashboard
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dashboard-run-${{ github.run_number }}
-          path: |
-            dashboard/index.html
-            dashboard_data.json
+          path: dashboard.html
           retention-days: 7
 
       # ── 9. Upload SQLite database as artifact (backup) ────────

@@ -195,15 +195,15 @@ def cmd_status():
 
 def cmd_export_dashboard():
     """
-    Generate dashboard_data.json from the current bot state.
-    The dashboard/index.html reads this file to show live data.
+    Generate a self-contained dashboard.html with all bot data embedded.
+    Open this single file in any browser — no server, no fetch, no CORS issues.
     """
     import state_manager as sm
     import json, os
     from datetime import datetime
 
     log = logging.getLogger("Orchestrator")
-    log.info("📊 Generating dashboard_data.json...")
+    log.info("📊 Generating self-contained dashboard.html...")
 
     # Gather all data
     site_analysis      = sm.get_value("website_analyzer", "site_analysis", {})
@@ -235,32 +235,68 @@ def cmd_export_dashboard():
         log.warning(f"Could not read published_urls: {e}")
 
     data = {
-        "generated_at":         datetime.utcnow().isoformat(),
-        "target_site":          os.getenv("TARGET_SITE_URL", ""),
-        "site_name":            os.getenv("SITE_NAME", ""),
-        "site_analysis":        site_analysis if isinstance(site_analysis, dict) else {},
-        "last_crawl":           last_crawl,
-        "articles_generated":   len(pending_articles) + len(published_articles),
-        "articles_published":   len(published_articles),
-        "pending_ads":          pending_ads if isinstance(pending_ads, list) else [],
+        "generated_at":           datetime.utcnow().isoformat(),
+        "target_site":            os.getenv("TARGET_SITE_URL", ""),
+        "site_name":              os.getenv("SITE_NAME", ""),
+        "site_analysis":          site_analysis if isinstance(site_analysis, dict) else {},
+        "last_crawl":             last_crawl,
+        "articles_generated":     len(pending_articles) + len(published_articles),
+        "articles_published":     len(published_articles),
+        "pending_ads":            pending_ads if isinstance(pending_ads, list) else [],
         "published_social_posts": social_posts if isinstance(social_posts, list) else [],
-        "quora_drafts":         quora_drafts if isinstance(quora_drafts, list) else [],
-        "analytics":            analytics_report if isinstance(analytics_report, dict) else {},
-        "content_strategy":     content_strategy if isinstance(content_strategy, dict) else {},
-        "optimizer_report":     optimizer_report if isinstance(optimizer_report, dict) else {},
-        "published_urls":       published_urls,
-        "recent_runs":          recent_runs,
-        "total_runs":           len(recent_runs),
-        "traffic_sessions":     (analytics_report or {}).get("total_sessions", 0),
+        "quora_drafts":           quora_drafts if isinstance(quora_drafts, list) else [],
+        "analytics":              analytics_report if isinstance(analytics_report, dict) else {},
+        "content_strategy":       content_strategy if isinstance(content_strategy, dict) else {},
+        "optimizer_report":       optimizer_report if isinstance(optimizer_report, dict) else {},
+        "published_urls":         published_urls,
+        "recent_runs":            recent_runs,
+        "total_runs":             len(recent_runs),
+        "traffic_sessions":       (analytics_report or {}).get("total_sessions", 0),
     }
 
-    out_path = os.path.join(os.path.dirname(__file__), "dashboard_data.json")
-    with open(out_path, "w") as f:
+    # Also write dashboard_data.json (for debugging / future use)
+    json_path = os.path.join(os.path.dirname(__file__), "dashboard_data.json")
+    with open(json_path, "w") as f:
         json.dump(data, f, indent=2, default=str)
 
-    log.info(f"✅ dashboard_data.json written ({os.path.getsize(out_path)} bytes)")
+    # Read the HTML template
+    html_path = os.path.join(os.path.dirname(__file__), "dashboard", "index.html")
+    with open(html_path, "r") as f:
+        html = f.read()
+
+    # Inject data as a global variable and replace the fetch-based loadStatus
+    # with a version that reads from window.DASHBOARD_DATA instead.
+    data_json = json.dumps(data, default=str)
+    inject_script = f"""
+<script>
+// ── Embedded data (injected at build time, no fetch needed) ──────
+window.DASHBOARD_DATA = {data_json};
+</script>"""
+
+    # Patch loadStatus to use embedded data instead of fetch
+    old_fetch_block = '''  try {
+    const res = await fetch("../dashboard_data.json?" + Date.now());
+    if (!res.ok) throw new Error("No data yet");
+    const d = await res.json();'''
+
+    new_fetch_block = '''  try {
+    const d = window.DASHBOARD_DATA;
+    if (!d) throw new Error("No embedded data found");'''
+
+    html = html.replace(old_fetch_block, new_fetch_block)
+
+    # Insert the data script just before </head>
+    html = html.replace("</head>", inject_script + "\n</head>")
+
+    # Write the self-contained file
+    out_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
+    with open(out_path, "w") as f:
+        f.write(html)
+
+    ads_pending = len([a for a in data['pending_ads'] if a.get('status') == 'pending_approval'])
+    log.info(f"✅ dashboard.html written ({os.path.getsize(out_path):,} bytes) — open this file in any browser")
     log.info(f"   Articles: {data['articles_published']} published, {data['articles_generated']} total")
-    log.info(f"   Ads pending approval: {len([a for a in data['pending_ads'] if a.get('status')=='pending_approval'])}")
+    log.info(f"   Ads pending approval: {ads_pending}")
     log.info(f"   Social posts: {len(data['published_social_posts'])}")
     log.info(f"   Quora drafts: {len(data['quora_drafts'])}")
 
