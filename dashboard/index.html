@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CapX Bot Dashboard</title>
+  <style>
+    :root {
+      --bg:    #0f1117;
+      --card:  #1a1d27;
+      --border:#2a2d3e;
+      --green: #22c55e;
+      --red:   #ef4444;
+      --yellow:#eab308;
+      --blue:  #3b82f6;
+      --text:  #e2e8f0;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; padding: 24px; }
+
+    h1  { font-size: 1.6rem; margin-bottom: 4px; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .card .value { font-size: 2rem; font-weight: 700; margin: 6px 0 2px; }
+    .card .sub   { font-size: 0.82rem; color: var(--muted); }
+
+    .green  { color: var(--green); }
+    .red    { color: var(--red); }
+    .yellow { color: var(--yellow); }
+    .blue   { color: var(--blue); }
+
+    h2 { font-size: 1.1rem; margin-bottom: 12px; color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th    { text-align: left; padding: 10px 14px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+    td    { padding: 10px 14px; border-bottom: 1px solid #1e2130; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1e2130; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-green  { background: #14532d; color: var(--green); }
+    .badge-red    { background: #450a0a; color: var(--red);   }
+    .badge-yellow { background: #422006; color: var(--yellow);}
+    .badge-blue   { background: #1e3a5f; color: var(--blue);  }
+
+    .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+
+    .cmd-box {
+      background: #090b14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.88rem;
+      color: var(--green);
+      margin: 8px 0;
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .cmd-box:hover { border-color: var(--blue); }
+    .cmd-label { color: var(--muted); font-size: 0.78rem; margin-bottom: 4px; font-family: sans-serif; }
+
+    .refresh-btn {
+      background: var(--blue);
+      border: none;
+      color: white;
+      padding: 8px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      float: right;
+      margin-top: -4px;
+    }
+    .refresh-btn:hover { background: #2563eb; }
+
+    footer { color: var(--muted); font-size: 0.78rem; margin-top: 32px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<h1>⚡ CapX Bot Dashboard</h1>
+<p class="subtitle" id="subtitle">Target: <strong>https://www.thecapx.in</strong> &nbsp;·&nbsp; Last refreshed: <span id="refresh-time">—</span></p>
+
+<!-- ── Stats Cards ──────────────────────────────────────────────── -->
+<div class="grid">
+  <div class="card">
+    <div class="label">Articles Generated</div>
+    <div class="value blue" id="stat-generated">—</div>
+    <div class="sub">Since bot started</div>
+  </div>
+  <div class="card">
+    <div class="label">Articles Published</div>
+    <div class="value green" id="stat-published">—</div>
+    <div class="sub">Across all platforms</div>
+  </div>
+  <div class="card">
+    <div class="label">Pending Articles</div>
+    <div class="value yellow" id="stat-pending">—</div>
+    <div class="sub">Ready to publish</div>
+  </div>
+  <div class="card">
+    <div class="label">Bot Runs (total)</div>
+    <div class="value" id="stat-runs">—</div>
+    <div class="sub">All time</div>
+  </div>
+</div>
+
+<!-- ── Site Analysis ─────────────────────────────────────────────── -->
+<div class="section">
+  <h2>🔍 Site Analysis <button class="refresh-btn" onclick="loadStatus()">↻ Refresh</button></h2>
+  <table>
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>Services Found</td><td id="ana-services">—</td></tr>
+    <tr><td>Target Audience</td><td id="ana-audience">—</td></tr>
+    <tr><td>Top Keywords</td><td id="ana-keywords">—</td></tr>
+    <tr><td>Unique Value</td><td id="ana-value">—</td></tr>
+    <tr><td>Last Crawl</td><td id="ana-time">—</td></tr>
+  </table>
+</div>
+
+<!-- ── Run History ───────────────────────────────────────────────── -->
+<div class="section">
+  <h2>📋 Recent Bot Runs</h2>
+  <table>
+    <thead><tr><th>Bot</th><th>Status</th><th>Started</th><th>Error</th></tr></thead>
+    <tbody id="run-table"><tr><td colspan="4" style="color:var(--muted)">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<!-- ── Quick Commands ─────────────────────────────────────────────── -->
+<div class="section">
+  <h2>⌨️ Quick Commands &nbsp;<small style="color:var(--muted);font-weight:400">(click to copy)</small></h2>
+
+  <div class="cmd-label">Run all bots now</div>
+  <div class="cmd-box" onclick="copy(this)">python orchestrator.py run all</div>
+
+  <div class="cmd-label">Run only content generator</div>
+  <div class="cmd-box" onclick="copy(this)">python orchestrator.py run content</div>
+
+  <div class="cmd-label">Publish pending articles</div>
+  <div class="cmd-box" onclick="copy(this)">python orchestrator.py run publish</div>
+
+  <div class="cmd-label">⚡ Switch ALL bots to a new site</div>
+  <div class="cmd-box" onclick="copy(this)">python orchestrator.py switch https://www.yournewsite.com</div>
+
+  <div class="cmd-label">Check status</div>
+  <div class="cmd-box" onclick="copy(this)">python orchestrator.py status</div>
+
+  <div class="cmd-label">Start continuous scheduler (if you have a server)</div>
+  <div class="cmd-box" onclick="copy(this)">python orchestrator.py schedule</div>
+</div>
+
+<!-- ── Published URLs ─────────────────────────────────────────────── -->
+<div class="section">
+  <h2>🌐 Recently Published</h2>
+  <div id="published-list" style="color:var(--muted);font-size:.88rem">
+    Run the bots first to see published articles here.
+  </div>
+</div>
+
+<footer>CapX Bot System · All services free · <a href="https://ai.google.dev" style="color:var(--blue)">Gemini AI</a> · <a href="https://github.com" style="color:var(--blue)">GitHub Actions</a> · <a href="https://supabase.com" style="color:var(--blue)">Supabase</a></footer>
+
+<script>
+// ── Load status from bot_state.db via a simple JSON file ─────────
+// The orchestrator writes dashboard_data.json each run
+
+async function loadStatus() {
+  document.getElementById("refresh-time").textContent = new Date().toLocaleTimeString();
+
+  try {
+    // Try to load the JSON data file written by the orchestrator
+    const res = await fetch("../dashboard_data.json?" + Date.now());
+    if (!res.ok) throw new Error("No data yet");
+    const d = await res.json();
+
+    // Stats
+    document.getElementById("stat-generated").textContent = d.articles_generated ?? "—";
+    document.getElementById("stat-published").textContent = d.articles_published ?? "—";
+    document.getElementById("stat-pending").textContent   = d.articles_pending   ?? "—";
+    document.getElementById("stat-runs").textContent      = d.total_runs         ?? "—";
+
+    // Analysis
+    const a = d.site_analysis ?? {};
+    document.getElementById("ana-services").textContent = (a.services ?? []).slice(0,5).join(", ") || "—";
+    document.getElementById("ana-audience").textContent = (a.target_audience ?? []).slice(0,3).join(", ") || "—";
+    document.getElementById("ana-keywords").textContent = (a.keywords ?? []).slice(0,6).join(", ") || "—";
+    document.getElementById("ana-value").textContent    = (a.unique_value ?? "").slice(0,120) || "—";
+    document.getElementById("ana-time").textContent     = d.last_crawl ?? "—";
+
+    // Runs table
+    const tbody = document.getElementById("run-table");
+    tbody.innerHTML = "";
+    (d.recent_runs ?? []).forEach(r => {
+      const icon  = r.status === "success" ? "✅" : r.status === "running" ? "🔄" : "❌";
+      const cls   = r.status === "success" ? "badge-green" : r.status === "running" ? "badge-blue" : "badge-red";
+      const time  = (r.started_at ?? "").slice(0,16).replace("T"," ");
+      const error = (r.error_msg ?? "").slice(0,50);
+      tbody.innerHTML += `<tr>
+        <td>${r.bot_name}</td>
+        <td><span class="badge ${cls}">${icon} ${r.status}</span></td>
+        <td>${time}</td>
+        <td style="color:var(--red)">${error}</td>
+      </tr>`;
+    });
+
+    // Published list
+    const pub = d.published_urls ?? [];
+    if (pub.length) {
+      document.getElementById("published-list").innerHTML = pub.slice(0,10).map(p =>
+        `<div style="margin:6px 0">
+          <a href="${p.url}" target="_blank" style="color:var(--blue)">${p.title || p.url}</a>
+          <span style="color:var(--muted);font-size:.78rem"> · ${p.platform} · ${(p.published_at||"").slice(0,10)}</span>
+        </div>`
+      ).join("");
+    }
+
+  } catch(e) {
+    // Show helpful message if data file not found
+    document.getElementById("run-table").innerHTML =
+      `<tr><td colspan="4" style="color:var(--yellow)">
+        ⚠️ No data yet. Run <code style="background:#090b14;padding:2px 6px;border-radius:4px">python orchestrator.py run all</code> first.
+      </td></tr>`;
+  }
+}
+
+function copy(el) {
+  navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+    const orig = el.style.borderColor;
+    el.style.borderColor = "var(--green)";
+    setTimeout(() => el.style.borderColor = orig, 800);
+  });
+}
+
+// Auto-refresh every 60 seconds
+loadStatus();
+setInterval(loadStatus, 60000);
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "target_site": "https://www.thecapx.in",
+  "site_name": "CapX",
+  "site_description": "Auto-detected on first run",
+
+  "bots": {
+    "website_analyzer":   { "enabled": true, "interval_hours": 24 },
+    "content_generator":  { "enabled": true, "interval_hours": 12 },
+    "seo_publisher":      { "enabled": true, "interval_hours": 24 },
+    "analytics_bot":      { "enabled": true, "interval_hours": 6  },
+    "engagement_bot":     { "enabled": true, "interval_hours": 4  },
+    "optimizer_bot":      { "enabled": true, "interval_hours": 168 }
+  },
+
+  "content": {
+    "articles_per_day": 3,
+    "publish_platforms": ["medium", "devto", "hashnode"],
+    "target_keywords_per_article": 5,
+    "language": "en"
+  },
+
+  "ai": {
+    "primary_provider":  "gemini",
+    "primary_model":     "gemini-1.5-flash",
+    "fallback_provider": "groq",
+    "fallback_model":    "llama-3.3-70b-versatile"
+  },
+
+  "notifications": {
+    "email_on_crash":   true,
+    "email_on_success": false
+  }
+}

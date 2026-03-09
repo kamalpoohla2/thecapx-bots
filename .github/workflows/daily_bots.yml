@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────
+#  DAILY BOTS — Runs every day at 8:00 AM (India time = 2:30 AM UTC)
+#
+#  FREE: GitHub gives 2,000 minutes/month free for public repos.
+#        This workflow uses ~5 minutes/day = ~150 min/month. Well within limits.
+#
+#  FAILSAFE: If the job fails, GitHub retries it automatically.
+#            State is saved to Supabase so bots resume from checkpoints.
+#
+#  HOW TO SET UP SECRETS (one-time, takes 2 minutes):
+#    1. Go to your GitHub repo → Settings → Secrets and variables → Actions
+#    2. Click "New repository secret" for each item below
+# ─────────────────────────────────────────────────────────────────
+
+name: Daily Bots
+
+on:
+  schedule:
+    # Every day at 2:30 AM UTC = 8:00 AM IST
+    - cron: "30 2 * * *"
+
+  # Also allows manual trigger from GitHub website (click "Run workflow")
+  workflow_dispatch:
+    inputs:
+      bot:
+        description: "Which bot to run (all / analyze / content / publish)"
+        required: false
+        default: "all"
+
+# Prevent multiple runs at the same time
+concurrency:
+  group: daily-bots
+  cancel-in-progress: false
+
+jobs:
+  run-bots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Get your code ──────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python ──────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── 3. Install dependencies ───────────────────────────────
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── 4. Write secrets to .env file ─────────────────────────
+      #     These secrets are set in GitHub → Settings → Secrets
+      - name: Create .env file from secrets
+        run: |
+          cat > .env << EOF
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+          MEDIUM_TOKEN=${{ secrets.MEDIUM_TOKEN }}
+          DEVTO_API_KEY=${{ secrets.DEVTO_API_KEY }}
+          HASHNODE_TOKEN=${{ secrets.HASHNODE_TOKEN }}
+          HASHNODE_PUBLICATION_ID=${{ secrets.HASHNODE_PUBLICATION_ID }}
+          BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}
+          NOTIFICATION_EMAIL=${{ secrets.NOTIFICATION_EMAIL }}
+          TARGET_SITE_URL=${{ secrets.TARGET_SITE_URL }}
+          SITE_NAME=${{ secrets.SITE_NAME }}
+          EOF
+
+      # ── 5. Run the bots ───────────────────────────────────────
+      - name: Run bots
+        run: |
+          BOT="${{ github.event.inputs.bot || 'all' }}"
+          echo "Running bot: $BOT"
+          python orchestrator.py run $BOT
+
+      # ── 6. Show status ────────────────────────────────────────
+      - name: Show status
+        if: always()   # Run even if previous step failed
+        run: python orchestrator.py status
+
+      # ── 7. Upload SQLite database as artifact (backup) ────────
+      #     This lets you download the database from GitHub if needed
+      - name: Upload database backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-state-${{ github.run_number }}
+          path: bot_state.db
+          retention-days: 7

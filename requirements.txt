@@ -1,0 +1,37 @@
+# Core
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+python-dotenv>=1.0.0
+schedule>=1.2.0
+tenacity>=8.2.3          # Retry with exponential backoff
+
+# AI
+google-generativeai>=0.5.0    # Gemini (free tier)
+groq>=0.4.0                    # Groq (free fallback)
+
+# Database
+supabase>=2.3.0                # Cloud DB (free tier)
+# SQLite is built into Python — no install needed
+
+# Web scraping
+lxml>=5.1.0
+html5lib>=1.1
+
+# Content publishing
+medium-sdk>=0.0.5              # Medium articles
+# Dev.to and Hashnode use plain REST calls (no extra SDK needed)
+
+# Analytics
+google-analytics-data>=0.18.0  # GA4 reporting
+
+# Notifications
+sib-api-v3-sdk>=7.6.0          # Brevo email
+
+# Scheduling / process management
+APScheduler>=3.10.4
+
+# Utilities
+colorlog>=6.8.0                # Coloured terminal output
+rich>=13.7.0                   # Pretty tables in terminal
+tabulate>=0.9.0
+pytz>=2024.1

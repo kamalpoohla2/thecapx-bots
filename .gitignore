@@ -1,0 +1,14 @@
+# Never commit these to GitHub
+.env
+bot_state.db
+service_account.json
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+node_modules/
