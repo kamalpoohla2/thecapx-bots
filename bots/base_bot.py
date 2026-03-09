@@ -200,15 +200,14 @@ class BaseBot(ABC):
         raise RuntimeError(f"All AI providers failed. Last error: {last_error}")
 
     def _ask_gemini(self, prompt: str, max_tokens: int) -> str:
-        import google.generativeai as genai
+        from google import genai
         api_key = os.getenv("GEMINI_API_KEY", "")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not set")
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(self.config["ai"]["primary_model"])
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens)
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=self.config["ai"]["primary_model"],
+            contents=prompt,
         )
         return response.text.strip()
 
