@@ -18,8 +18,7 @@ lxml>=5.1.0
 html5lib>=1.1
 
 # Content publishing
-medium-sdk>=0.0.5              # Medium articles
-# Dev.to and Hashnode use plain REST calls (no extra SDK needed)
+# Medium, Dev.to and Hashnode all use plain REST calls via requests (no extra SDK needed)
 
 # Analytics
 google-analytics-data>=0.18.0  # GA4 reporting
